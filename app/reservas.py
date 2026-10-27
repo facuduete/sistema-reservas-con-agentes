@@ -28,17 +28,20 @@ DURACION_MINIMA = timedelta(minutes=10)
 
 _PATRON_FECHA = re.compile(r"\d{4}-\d{2}-\d{2}")
 _PATRON_HORA = re.compile(r"\d{2}:\d{2}")
+_PATRON_MOMENTO = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}")
 _PATRON_ID_RESERVA = re.compile(r"RES-(\d+)")
 
 
 class ErrorNegocio(Exception):
     """Base de los errores de reglas de negocio.
 
-    ``codigo_http`` es un dato (no una dependencia de Flask) para que la
-    futura capa HTTP mapee cada error a su estado de respuesta.
+    ``codigo_http`` y ``codigo`` son datos (no dependencias de Flask) para
+    que la capa HTTP traduzca cada error a su estado y a su identificador
+    de respuesta sin conocer detalles internos del dominio.
     """
 
     codigo_http = 422
+    codigo = "error_negocio"
 
     def __init__(self, mensaje: str) -> None:
         super().__init__(mensaje)
@@ -48,45 +51,59 @@ class ErrorNegocio(Exception):
 class SolicitanteInvalido(ErrorNegocio):
     """El solicitante está vacío o compuesto solo por espacios."""
 
+    codigo = "solicitante_invalido"
+
 
 class FechaInvalida(ErrorNegocio):
     """Fecha u hora con formato o valor de calendario inválido."""
+
+    codigo = "fecha_invalida"
 
 
 class IntervaloInvalido(ErrorNegocio):
     """El inicio no es estrictamente anterior al fin."""
 
+    codigo = "intervalo_invalido"
+
 
 class DuracionInvalida(ErrorNegocio):
     """La duración es inferior a la mínima de 10 minutos."""
 
+    codigo = "duracion_invalida"
+
 
 class InicioPasado(ErrorNegocio):
     """El inicio es anterior al momento actual."""
+
+    codigo = "inicio_pasado"
 
 
 class Solapamiento(ErrorNegocio):
     """Otra reserva activa de la misma unidad superpone el intervalo."""
 
     codigo_http = 409
+    codigo = "solapamiento"
 
 
 class UnidadInexistente(ErrorNegocio):
     """El identificador de unidad no figura en el inventario."""
 
     codigo_http = 404
+    codigo = "unidad_inexistente"
 
 
 class ReservaInexistente(ErrorNegocio):
     """No existe una reserva con el identificador indicado."""
 
     codigo_http = 404
+    codigo = "reserva_inexistente"
 
 
 class EstadoInvalido(ErrorNegocio):
     """La operación no es válida para el estado actual de la reserva."""
 
     codigo_http = 409
+    codigo = "estado_invalido"
 
 
 # --------------------------------------------------------------------------
@@ -120,15 +137,25 @@ def _parsear_momento(fecha: object, hora: object) -> datetime:
     return datetime.combine(dia, momento, tzinfo=ZONA)
 
 
-def _parsear_intervalo(
-    fecha_inicio: object, hora_inicio: object, fecha_fin: object, hora_fin: object
-) -> tuple[datetime, datetime]:
-    """Valida formato, calendario y orden del intervalo pedido."""
-    inicio = _parsear_momento(fecha_inicio, hora_inicio)
-    fin = _parsear_momento(fecha_fin, hora_fin)
+def _validar_orden_intervalo(inicio: datetime, fin: datetime) -> None:
+    """Exige que el inicio sea estrictamente anterior al fin."""
     if inicio >= fin:
         raise IntervaloInvalido("El inicio debe ser estrictamente anterior al fin.")
-    return inicio, fin
+
+
+def parsear_momento(texto: object) -> datetime:
+    """Convierte ``AAAA-MM-DDTHH:MM`` (hora local UTC-3) en datetime aware.
+
+    Es el formato de entrada de la API HTTP: precisión de minutos, sin
+    segundos ni offset. La validación de formato y de calendario ocurre
+    aquí, en el dominio, no en la capa HTTP.
+    """
+    if not isinstance(texto, str) or not _PATRON_MOMENTO.fullmatch(texto):
+        raise FechaInvalida(
+            f"El momento {texto!r} no cumple el formato AAAA-MM-DDTHH:MM."
+        )
+    fecha, hora = texto.split("T")
+    return _parsear_momento(fecha, hora)
 
 
 def _solapa(inicio_a: datetime, fin_a: datetime, inicio_b: datetime, fin_b: datetime) -> bool:
@@ -209,6 +236,21 @@ def listar_unidades(conexion: sqlite3.Connection) -> list[dict]:
     return [{"id": fila["id"], "descripcion": fila["descripcion"]} for fila in filas]
 
 
+def unidad_disponible_entre(
+    conexion: sqlite3.Connection, unidad_id: str, inicio: datetime, fin: datetime
+) -> bool:
+    """Indica si una unidad está libre entre dos datetimes conscientes de zona.
+
+    Aplica exactamente el mismo predicado de superposición que la creación
+    de reservas. No evalúa reglas de creación (duración mínima ni inicio
+    pasado): consultar la disponibilidad de un intervalo pasado es válido.
+    """
+    _validar_orden_intervalo(inicio, fin)
+    if not _unidad_existe(conexion, unidad_id):
+        raise UnidadInexistente(f"La unidad {unidad_id!r} no existe en el inventario.")
+    return _esta_libre(conexion, unidad_id, inicio, fin)
+
+
 def unidad_disponible(
     conexion: sqlite3.Connection,
     unidad_id: str,
@@ -217,16 +259,24 @@ def unidad_disponible(
     fecha_fin: str,
     hora_fin: str,
 ) -> bool:
-    """Indica si una unidad está libre en el intervalo dado.
+    """Versión por textos (AAAA-MM-DD / HH:MM) de ``unidad_disponible_entre``."""
+    return unidad_disponible_entre(
+        conexion,
+        unidad_id,
+        _parsear_momento(fecha_inicio, hora_inicio),
+        _parsear_momento(fecha_fin, hora_fin),
+    )
 
-    Aplica exactamente el mismo predicado de superposición que la creación
-    de reservas. No evalúa reglas de creación (duración mínima ni inicio
-    pasado): consultar la disponibilidad de un intervalo pasado es válido.
-    """
-    inicio, fin = _parsear_intervalo(fecha_inicio, hora_inicio, fecha_fin, hora_fin)
-    if not _unidad_existe(conexion, unidad_id):
-        raise UnidadInexistente(f"La unidad {unidad_id!r} no existe en el inventario.")
-    return _esta_libre(conexion, unidad_id, inicio, fin)
+
+def consultar_disponibilidad_entre(
+    conexion: sqlite3.Connection, inicio: datetime, fin: datetime
+) -> list[dict]:
+    """Disponibilidad de todas las unidades entre dos datetimes aware."""
+    _validar_orden_intervalo(inicio, fin)
+    return [
+        {**unidad, "disponible": _esta_libre(conexion, unidad["id"], inicio, fin)}
+        for unidad in listar_unidades(conexion)
+    ]
 
 
 def consultar_disponibilidad(
@@ -236,33 +286,32 @@ def consultar_disponibilidad(
     fecha_fin: str,
     hora_fin: str,
 ) -> list[dict]:
-    """Devuelve todas las unidades con su disponibilidad en el intervalo."""
-    inicio, fin = _parsear_intervalo(fecha_inicio, hora_inicio, fecha_fin, hora_fin)
-    return [
-        {**unidad, "disponible": _esta_libre(conexion, unidad["id"], inicio, fin)}
-        for unidad in listar_unidades(conexion)
-    ]
+    """Versión por textos (AAAA-MM-DD / HH:MM) de ``consultar_disponibilidad_entre``."""
+    return consultar_disponibilidad_entre(
+        conexion,
+        _parsear_momento(fecha_inicio, hora_inicio),
+        _parsear_momento(fecha_fin, hora_fin),
+    )
 
 
-def crear_reserva(
+def crear_reserva_entre(
     conexion: sqlite3.Connection,
     unidad_id: str,
     solicitante: str,
-    fecha_inicio: str,
-    hora_inicio: str,
-    fecha_fin: str,
-    hora_fin: str,
+    inicio: datetime,
+    fin: datetime,
     ahora: datetime | None = None,
 ) -> dict:
-    """Crea una reserva aplicando todas las reglas de negocio.
+    """Crea una reserva entre dos datetimes aware, con todas las reglas.
 
-    Orden de validación: solicitante, fechas e intervalo, unidad, duración
-    mínima, inicio no pasado y superposición. Devuelve la reserva creada.
+    Orden de validación: solicitante, orden del intervalo, unidad, duración
+    mínima, inicio no pasado y superposición. Un error aborta antes del
+    INSERT, de modo que nunca quedan reservas parciales.
     """
     if ahora is None:
         ahora = datetime.now(tz=ZONA)
     solicitante_normalizado = _validar_solicitante(solicitante)
-    inicio, fin = _parsear_intervalo(fecha_inicio, hora_inicio, fecha_fin, hora_fin)
+    _validar_orden_intervalo(inicio, fin)
     if not _unidad_existe(conexion, unidad_id):
         raise UnidadInexistente(f"La unidad {unidad_id!r} no existe en el inventario.")
     if fin - inicio < DURACION_MINIMA:
@@ -284,6 +333,27 @@ def crear_reserva(
     )
     conexion.commit()
     return obtener_reserva(conexion, _id_publico(cursor.lastrowid))
+
+
+def crear_reserva(
+    conexion: sqlite3.Connection,
+    unidad_id: str,
+    solicitante: str,
+    fecha_inicio: str,
+    hora_inicio: str,
+    fecha_fin: str,
+    hora_fin: str,
+    ahora: datetime | None = None,
+) -> dict:
+    """Versión por textos (AAAA-MM-DD / HH:MM) de ``crear_reserva_entre``."""
+    return crear_reserva_entre(
+        conexion,
+        unidad_id,
+        solicitante,
+        _parsear_momento(fecha_inicio, hora_inicio),
+        _parsear_momento(fecha_fin, hora_fin),
+        ahora=ahora,
+    )
 
 
 def obtener_reserva(conexion: sqlite3.Connection, reserva_id: str) -> dict:

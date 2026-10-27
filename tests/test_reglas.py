@@ -5,11 +5,10 @@ interfaz. El caso 12 (persistencia entre detenciones y reinicios de la
 aplicación completa) se prueba en su propia etapa con dos instancias de la
 app sobre la misma base.
 
-El reloj se inyecta fijo (AHORA_FIJO) para que todas las pruebas sean
-deterministas: ninguna depende de la hora real de ejecución.
+El reloj se inyecta fijo (AHORA_FIJO, definido en tests/conftest.py) para
+que todas las pruebas sean deterministas: ninguna depende de la hora real
+de ejecución.
 """
-
-from datetime import datetime
 
 import pytest
 
@@ -24,36 +23,8 @@ from app.reservas import (
     Solapamiento,
     SolicitanteInvalido,
     UnidadInexistente,
-    ZONA,
 )
-
-# Momento actual fijo: martes 2026-10-27, 09:00 (UTC-3).
-AHORA_FIJO = datetime(2026, 10, 27, 9, 0, tzinfo=ZONA)
-
-
-@pytest.fixture()
-def conexion(tmp_path):
-    """Base de datos nueva y inicializada por prueba, en un directorio temporal."""
-    conexion = db.conectar(tmp_path / "reservas.db")
-    db.inicializar(conexion)
-    yield conexion
-    conexion.close()
-
-
-def crear(
-    conexion,
-    unidad="MIC-01",
-    solicitante="alumno@test",
-    fecha_i="2026-10-27",
-    hora_i="10:00",
-    fecha_f="2026-10-27",
-    hora_f="11:00",
-):
-    """Atajo para crear reservas válidas con el reloj fijo."""
-    return reservas.crear_reserva(
-        conexion, unidad, solicitante, fecha_i, hora_i, fecha_f, hora_f,
-        ahora=AHORA_FIJO,
-    )
+from conftest import AHORA_FIJO, crear
 
 
 # --------------------------------------------------------------------------

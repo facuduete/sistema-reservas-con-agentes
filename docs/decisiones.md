@@ -157,3 +157,169 @@ Resultado: **26 passed in 0.63s**, en la primera ejecución, sin
 modificaciones posteriores al código probado. Cubre los casos 1 a 11 de la
 consigna (el caso 12, persistencia entre reinicios de la aplicación
 completa, corresponde a su etapa propia).
+
+## Etapa 2 — API HTTP (2026-10-27)
+
+### Archivos creados y modificados
+
+- Creados: `app/views.py` (rutas), `run.py` (punto de entrada),
+  `tests/conftest.py` (fixtures compartidas), `tests/test_api.py`.
+- Modificados: `app/__init__.py` (pasa a contener la fábrica `create_app`),
+  `app/reservas.py` (único cambio: atributo `codigo` en las excepciones de
+  dominio), `tests/test_reglas.py` (las fixtures y el atajo `crear` se
+  mudaron a `conftest.py`; las pruebas no cambiaron).
+
+### Diseño de las rutas
+
+| Método y ruta | Éxito | Errores posibles |
+|---|---|---|
+| `GET /api/unidades` | 200 `{"unidades": [...]}` | — |
+| `GET /api/disponibilidad?fecha_inicio=&hora_inicio=&fecha_fin=&hora_fin=` | 200 `{"disponibilidad": [...]}` con `disponible` por unidad | 400 sin parámetros; 422 fechas/intervalo inválidos; 404 unidad inexistente (solo vía `unidad_disponible`) |
+| `POST /api/reservas` | 201 con la reserva creada (incluye `id` público) | 400 cuerpo/ campos; 404 unidad inexistente; 409 solapamiento; 422 reglas de negocio |
+| `GET /api/reservas` | 200 `{"reservas": [...]}` con activas y canceladas | 400 si el filtro `estado` no es válido |
+| `POST /api/reservas/<id>/cancelar` | 200 con la reserva cancelada | 404 inexistente; 409 ya cancelada |
+
+### Formato de solicitudes y respuestas
+
+- Creación por JSON: `{"unidad", "solicitante", "fecha_inicio",
+  "hora_inicio", "fecha_fin", "hora_fin"}` con `AAAA-MM-DD` y `HH:MM`.
+- Convención de cuerpos: las colecciones van envueltas (`{"unidades":
+  [...]}`, `{"disponibilidad": [...]}`, `{"reservas": [...]}`) y los objetos
+  individuales van directos (creación 201 y cancelación 200 devuelven la
+  reserva con `id`, `unidad`, `solicitante`, `inicio`, `fin`, `estado`,
+  `creada_en`, `cancelada_en`).
+- Errores: `{"error": {"codigo": "...", "mensaje": "..."}}`, con los
+  códigos definidos por el dominio (`solicitante_invalido`,
+  `fecha_invalida`, `intervalo_invalido`, `duracion_invalida`,
+  `inicio_pasado`, `solapamiento`, `unidad_inexistente`,
+  `reserva_inexistente`, `estado_invalido`, más `cuerpo_invalido`,
+  `campos_faltantes`, `parametros_faltantes`, `parametro_invalido` de
+  estructura, y `not_found`/`method_not_allowed` del framework).
+
+### Traducción de errores de dominio a HTTP
+
+1. **Único cambio en el dominio**: se agregó a cada excepción de
+   `app/reservas.py` un atributo de clase `codigo` (además del
+   `codigo_http` ya existente). La vista nunca interpreta la lógica: lee
+   `e.codigo` y `e.codigo_http` y arma la respuesta JSON. El dominio sigue
+   sin importar Flask.
+2. **Frontera 400/422 decidida así**: lo *ausente o no parseable como
+   solicitud* es 400 (JSON mal formado → `cuerpo_invalido`; campo obligatorio
+   ausente o nulo → `campos_faltantes`; parámetro de consulta ausente →
+   `parametros_faltantes`). Lo *presente pero inválido* lo valida el dominio
+   y recibe su código (por ejemplo `solicitante: "   "` → 422
+   `solicitante_invalido`; `fecha_inicio: "abc"` → 422 `fecha_invalida`).
+   Motivo: no duplicar validación de negocio en la capa HTTP, lo que
+   garantizaría dos fuentes de verdad.
+3. **Errores del framework en JSON**: `HTTPException` (ruta desconocida,
+   método no permitido) se traduce a la misma estructura con el nombre del
+   error (`not_found`, `method_not_allowed`). `Exception` genérica se
+   registra con `app.logger.exception` y responde 500 `error_interno` sin
+   trazas ni detalles internos.
+
+### Configuración de la base de datos
+
+- `create_app(ruta_db=None)`: por defecto `data/reservas.db` (relativa a la
+  raíz del proyecto); las pruebas pasan `tmp_path / "api.db"`.
+- El esquema se inicializa al crear la aplicación con la operación
+  idempotente de la Etapa 1 (no duplica unidades ni borra reservas).
+- La conexión SQLite se abre **por solicitud** en `flask.g` y se cierra en
+  `teardown_appcontext` (en SQLite la configuración es por conexión y el
+  servidor de desarrollo atiende cada solicitud en su hilo).
+
+### Pruebas
+
+- Las fixtures compartidas (`conexion`, `crear`, `AHORA_FIJO`) se trasladaron
+  a `tests/conftest.py` y `test_reglas.py` ahora las importa; la suite de
+  dominio completa se re-ejecutó para verificar que el comportamiento quedó
+  idéntico.
+- `test_api.py` siembra datos por el dominio (no repite reglas ya probadas)
+  y usa el cliente de Flask sobre bases temporales.
+- **Fecha futura fija (2027-03-15) en todas las creaciones de la API**: la
+  API usa el reloj real del servidor, así que una fecha "cercana" podría
+  volverse pasada según cuándo se ejecuten las pruebas y provocar
+  `inicio_pasado` espurios. Con 2027-03-15 el resultado no depende del
+  momento de ejecución. La prueba del caso "inicio pasado" usa 2020-01-01,
+  siempre pasado. El borde "inicio igual al momento actual" no es
+  deterministicamente testeable vía API y queda cubierto en el dominio.
+- El handler de 500 existe pero **no** tiene prueba automatizada: con
+  `app.testing = True` Flask re-lanza las excepciones no previstas
+  (`PROPAGATE_EXCEPTIONS`), por lo que simular una falla interna exigiría
+  monkeypatching que no aporta a la consigna. Queda registrado como límite.
+
+### Desviaciones respecto del prompt
+
+- El prompt de esta etapa llegó **truncado en su inicio**: faltan los
+  encabezados de las secciones A y B. El contenido se implementó a partir de
+  lo conservado (delegar validaciones, 201 con identificador público, sin
+  reservas parciales) y de las secciones C y D. No se detectó requisito
+  faltante al cruzar con la lista de pruebas mínimas.
+
+### Verificación real
+
+1. `.venv\Scripts\python.exe -m pytest -v` → **48 passed in 1.14s**
+   (22 de API + 26 de dominio), primera ejecución sin correcciones.
+2. Prueba de humo de `run.py`: se arrancó el proceso real
+   (`Start-Process .venv\Scripts\python.exe run.py`), se consultó
+   `http://127.0.0.1:5000/api/unidades` con `Invoke-WebRequest` →
+   **STATUS: 200** con las cinco unidades en JSON, y el proceso se detuvo
+   (`Stop-Process`). Esto creó `data/reservas.db`, ignorada por Git.
+
+### Corrección tras recibir el prompt completo (2026-10-27)
+
+El primer envío de las instrucciones de esta etapa llegó truncado y se
+implementó sobre esa base; luego el usuario reenvió el prompt completo, que
+especifica un contrato distinto al inferido. Correcciones aplicadas:
+
+1. **`GET /api/unidades?desde=AAAA-MM-DDTHH:MM&hasta=AAAA-MM-DDTHH:MM`**
+   reemplaza a la ruta propia `GET /api/disponibilidad` que había
+   implementado: la disponibilidad se consulta sobre el listado de
+   unidades, y sin parámetros la ruta devuelve las unidades sin el
+   indicador `disponible`. Con un solo parámetro (`desde` o `hasta`)
+   responde 400 `parametros_faltantes`. Motivo: alineación literal con el
+   prompt completo y superficie de API más pequeña.
+2. **`POST /api/reservas` ahora recibe `unidad`, `solicitante`, `desde` e
+   `hasta`**, con los momentos como texto combinado `AAAA-MM-DDTHH:MM`
+   (precisión de minutos, sin segundos ni offset), en lugar de los campos
+   separados `fecha_inicio`/`hora_inicio`/`fecha_fin`/`hora_fin` de la
+   primera versión. Las respuestas siguen exponiendo `inicio` y `fin` como
+   ISO 8601 con offset (`2027-03-15T10:00:00-03:00`).
+3. **El parseo del momento combinado vive en el dominio**, no en la vista:
+   se agregaron a `app/reservas.py` la función pública `parsear_momento`
+   (formato `AAAA-MM-DDTHH:MM`, reutiliza la validación de calendario
+   existente) y las variantes `crear_reserva_entre`,
+   `consultar_disponibilidad_entre` y `unidad_disponible_entre`, que
+   aceptan datetimes aware. Las versiones por textos separados se
+   conservan como delegados y siguen alimentando las pruebas de dominio y
+   la futura interfaz. Así la regla "no duplicar validaciones en las
+   rutas" se mantiene también para el nuevo formato.
+4. **Desviación documentada sobre 400/422 en parámetros de consulta**: el
+   prompt pide 400 para parámetros "ausentes/mal formados". Decisión:
+   *ausentes* → 400 (`parametros_faltantes`); *presentes pero con formato
+   o valor inválido* → el error del dominio (422 `fecha_invalida`, 422
+   `intervalo_invalido`). Motivo: marcar el formato de fecha en la vista
+   duplicaría la validación que la consigna prohíbe duplicar y crearía dos
+   fuentes de verdad. El mismo criterio se aplica al cuerpo JSON.
+5. **Orden de validación en la creación** quedó: estructura de la solicitud
+   (400) → formato temporal de `desde`/`hasta` (422) → reglas de negocio en
+   el dominio (solicitante, intervalo, unidad, duración, inicio pasado,
+   solapamiento). Leve diferencia con la primera versión, donde el
+   solicitante se validaba antes que el formato de las fechas; ningún
+   requisito la exige de otra manera y quedó documentada.
+6. Observación menor registrada: `creada_en`/`cancelada_en` incluyen
+   microsegundos (proviene del reloj real), mientras que `inicio`/`fin`
+   tienen precisión de minutos (proviene de la entrada). Es inocuo para
+   las reglas; se unificará solo si la interfaz lo requiere.
+
+### Verificación real de la corrección
+
+1. `.venv\Scripts\python.exe -m pytest -v` → **48 passed in 1.13s**
+   (22 de API reescritas al nuevo contrato + 26 de dominio sin cambios).
+2. Prueba de humo completa sobre `run.py` (proceso real, `Invoke-WebRequest`):
+   `GET /api/unidades` → 200; `GET /api/unidades?desde=2027-03-15T10:00&hasta=2027-03-15T11:00`
+   → 200 con `disponible: true` en las cinco unidades; `POST /api/reservas`
+   → **201** con `id: RES-001`; `GET /api/reservas` → 200 con la reserva
+   activa; `POST /api/reservas/RES-001/cancelar` → **200** con estado
+   `cancelada` y datos originales intactos. El proceso se detuvo y la base
+   `data/reservas.db` generada por la prueba de humo se eliminó para dejar
+   el entorno limpio.
