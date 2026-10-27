@@ -1,0 +1,16 @@
+# Entorno virtual de Python
+.venv/
+
+# Cachés de Python y pytest
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Base de datos SQLite local (datos de runtime, no código)
+data/
+*.db
+*.sqlite3
+
+# Archivos locales del sistema operativo
+Thumbs.db
+.DS_Store

@@ -1,0 +1,15 @@
+# Dependencias del sistema de reservas de laboratorio.
+# Versiones fijadas a las realmente instaladas y verificadas en la Etapa 0.
+#
+# Entorno comprobado al fijar estas versiones:
+#   Python 3.14.3 (venv local .venv, Windows)
+#   pip 25.3
+#   Git 2.45.2.windows.1
+#
+# Notas:
+# - sqlite3 y datetime son módulos de la biblioteca estándar (no se instalan).
+# - La zona horaria es UTC-3 fija (timezone(timedelta(hours=-3))), por lo que
+#   NO se requiere el paquete tzdata ni bases de datos externas de zonas.
+
+flask==3.1.3
+pytest==9.1.1
