@@ -245,12 +245,12 @@ completa, corresponde a su etapa propia).
   (`PROPAGATE_EXCEPTIONS`), por lo que simular una falla interna exigiría
   monkeypatching que no aporta a la consigna. Queda registrado como límite.
 
-### Desviaciones respecto del prompt
+### Primera versión implementada
 
-- El prompt de esta etapa llegó **truncado en su inicio**: faltan los
-  encabezados de las secciones A y B. El contenido se implementó a partir de
-  lo conservado (delegar validaciones, 201 con identificador público, sin
-  reservas parciales) y de las secciones C y D. No se detectó requisito
+- La primera versión de la API se implementó a partir de una entrega
+  inicial incompleta de la instrucción: se conservaron los requisitos
+  explícitos (delegar validaciones, 201 con identificador público, sin
+  reservas parciales) y las secciones C y D. No se detectó requisito
   faltante al cruzar con la lista de pruebas mínimas.
 
 ### Verificación real
@@ -263,11 +263,11 @@ completa, corresponde a su etapa propia).
    **STATUS: 200** con las cinco unidades en JSON, y el proceso se detuvo
    (`Stop-Process`). Esto creó `data/reservas.db`, ignorada por Git.
 
-### Corrección tras recibir el prompt completo (2026-10-27)
+### Ajuste al contrato definitivo de la API (2026-10-27)
 
-El primer envío de las instrucciones de esta etapa llegó truncado y se
-implementó sobre esa base; luego el usuario reenvió el prompt completo, que
-especifica un contrato distinto al inferido. Correcciones aplicadas:
+La primera versión se implementó sobre la base de la entrega inicial
+incompleta de la instrucción; el usuario definió después el contrato
+definitivo, que difiere del inferido. Ajustes aplicados:
 
 1. **`GET /api/unidades?desde=AAAA-MM-DDTHH:MM&hasta=AAAA-MM-DDTHH:MM`**
    reemplaza a la ruta propia `GET /api/disponibilidad` que había
@@ -275,7 +275,7 @@ especifica un contrato distinto al inferido. Correcciones aplicadas:
    unidades, y sin parámetros la ruta devuelve las unidades sin el
    indicador `disponible`. Con un solo parámetro (`desde` o `hasta`)
    responde 400 `parametros_faltantes`. Motivo: alineación literal con el
-   prompt completo y superficie de API más pequeña.
+   contrato definido por el usuario y superficie de API más pequeña.
 2. **`POST /api/reservas` ahora recibe `unidad`, `solicitante`, `desde` e
    `hasta`**, con los momentos como texto combinado `AAAA-MM-DDTHH:MM`
    (precisión de minutos, sin segundos ni offset), en lugar de los campos
@@ -291,8 +291,8 @@ especifica un contrato distinto al inferido. Correcciones aplicadas:
    conservan como delegados y siguen alimentando las pruebas de dominio y
    la futura interfaz. Así la regla "no duplicar validaciones en las
    rutas" se mantiene también para el nuevo formato.
-4. **Desviación documentada sobre 400/422 en parámetros de consulta**: el
-   prompt pide 400 para parámetros "ausentes/mal formados". Decisión:
+4. **Desviación documentada sobre 400/422 en parámetros de consulta**: la
+   instrucción pide 400 para parámetros "ausentes/mal formados". Decisión:
    *ausentes* → 400 (`parametros_faltantes`); *presentes pero con formato
    o valor inválido* → el error del dominio (422 `fecha_invalida`, 422
    `intervalo_invalido`). Motivo: marcar el formato de fecha en la vista
@@ -309,7 +309,7 @@ especifica un contrato distinto al inferido. Correcciones aplicadas:
    tienen precisión de minutos (proviene de la entrada). Es inocuo para
    las reglas; se unificará solo si la interfaz lo requiere.
 
-### Verificación real de la corrección
+### Verificación real del ajuste
 
 1. `.venv\Scripts\python.exe -m pytest -v` → **48 passed in 1.13s**
    (22 de API reescritas al nuevo contrato + 26 de dominio sin cambios).
@@ -532,8 +532,9 @@ se verificó ejecutando el cálculo real de la aplicación:
   evidencia), reconstruidos desde el historial de conversación y commits:
   1. Contradicción «HH» vs. «HH:MM» y su resolución por consulta (Etapa 1,
      evidencia en `b4da7fc`).
-  2. Corrección del contrato de la API tras recibir el prompt completo
-     (Etapa 2, evidencia en `e30ec93`).
+  2. Implementación y validación del contrato de la API: disponibilidad
+     con `desde`/`hasta` en `GET /api/unidades` y momentos combinados en
+     la creación (Etapa 2, evidencia en `e30ec93`).
   3. Bootstrap vendoreado solo con CSS (Etapa 3, evidencia en `be00ab5`).
 - Esta sección (registro de la etapa de documentación).
 

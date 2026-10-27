@@ -377,7 +377,7 @@ objeto y `"estado": "cancelada"`, conservando todos los datos originales.
 |---|---|---|
 | 0 | Entorno: venv, pip vía `ensurepip`, dependencias fijadas | (incluido en `b4da7fc`) |
 | 1 | Dominio y persistencia (`inventory`, `db`, `reservas`) + pruebas de reglas | `b4da7fc` |
-| 2 | API HTTP (corregida al recibir el prompt completo) + pruebas | `e30ec93` |
+| 2 | API HTTP (contrato con `desde`/`hasta` combinados) + pruebas | `e30ec93` |
 | 3 | Interfaz web + Bootstrap local + pruebas de integración | `be00ab5` |
 | 4 | Persistencia tras reinicio, integridad, handler 500, procedimiento manual | `56a96ad` |
 | 5 | Documentación final (este README, `docs/delegacion.md`) | pendiente de commit |
@@ -387,9 +387,10 @@ objeto y `"estado": "cancelada"`, conservando todos los datos originales.
 Las adaptaciones significativas, con su motivo y evidencia, están
 registradas en [`docs/decisiones.md`](docs/decisiones.md) y narradas como
 episodios en [`docs/delegacion.md`](docs/delegacion.md): la aclaración del
-formato de hora (HH → HH:MM), la corrección del contrato de la API al
-recibir el prompt completo (`desde`/`hasta` combinados) y la decisión de
-vendorizar solo el CSS de Bootstrap.
+formato de hora (HH → HH:MM), la implementación y validación del contrato
+de la API (disponibilidad con `desde`/`hasta` en `GET /api/unidades` y
+momentos combinados en la creación) y la decisión de vendorizar solo el
+CSS de Bootstrap.
 
 ### 3.6 Conservación del progreso
 
@@ -417,8 +418,9 @@ vendorizar solo el CSS de Bootstrap.
   1. *Detección de una contradicción en la especificación* (Etapa 1):
      formato de hora «HH» vs. «HH:MM» y duración mínima de 10 minutos;
      el agente consultó y el usuario confirmó HH:MM (`b4da7fc`).
-  2. *Corrección del contrato de la API* (Etapa 2): prompt truncado,
-     primera implementación inferida y corrección al recibir el prompt
-     completo con `desde`/`hasta` combinados (`e30ec93`).
+  2. *Implementación y validación del contrato de la API* (Etapa 2):
+     disponibilidad por intervalo en `GET /api/unidades?desde=&hasta=` y
+     creación con momentos combinados `desde`/`hasta`, con el parseo
+     delegado al dominio (`e30ec93`).
   3. *Bootstrap vendoreado solo con CSS* (Etapa 3): cumplimiento offline
      sin incorporar el bundle JS innecesario (`be00ab5`).

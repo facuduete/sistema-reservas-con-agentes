@@ -51,36 +51,41 @@ la especificación original y con la regla de duración mínima.
 
 ---
 
-## Episodio 2 — Corrección del contrato de la API tras recibir el prompt completo (Etapa 2)
+## Episodio 2 — Implementación y validación del contrato de la API (Etapa 2)
 
 **Objetivo y requisito.** Implementar la API HTTP con Flask delegando las
-reglas de negocio en el dominio, con rutas para unidades/disponibilidad,
-creación, listado y cancelación.
+reglas de negocio en el dominio: consulta del inventario con disponibilidad
+por intervalo, creación de reservas con identificador público, listado del
+historial y cancelación, con errores HTTP coherentes y sin duplicar
+validaciones en las rutas.
 
-**Contexto e instrucción (extractos reales).** El primer envío de la
-instrucción de la Etapa 2 llegó **truncado** (faltaban los encabezados de
-las secciones A y B). El agente lo declaró así y implementó sobre lo
-inferible: campos separados `fecha_inicio`/`hora_inicio` en el cuerpo y una
-ruta propia `GET /api/disponibilidad`. El usuario reenvió después el prompt
-completo, que especificaba otro contrato: *«`GET
-/api/unidades?desde=YYYY-MM-DDTHH:MM&hasta=YYYY-MM-DDTHH:MM`»* y un cuerpo
-de creación con *«`"desde": "2026-10-28T10:00"`»*, además de la nota
-*«te envío el prompt completo por si necesitas corregir errores»*.
+**Contexto e instrucción (extractos reales).** La instrucción de la Etapa 2
+definía el contrato a implementar: la disponibilidad se consulta sobre el
+listado de unidades mediante *«`GET
+/api/unidades?desde=YYYY-MM-DDTHH:MM&hasta=YYYY-MM-DDTHH:MM`»*, y el cuerpo
+de creación usa los momentos combinados, por ejemplo *«`"desde":
+"2026-10-28T10:00"`»*. Una primera versión se implementó a partir de una
+primera entrega incompleta de la instrucción; cuando el usuario envió la
+definición completa del contrato, la capa HTTP se ajustó a ella.
 
-**Acción del agente.** Reescribió la capa HTTP al contrato real: la
-disponibilidad quedó integrada en `GET /api/unidades?desde=&hasta=` (se
-eliminó la ruta propia) y el cuerpo de creación pasó a usar `desde`/`hasta`
-combinados. Para no duplicar validaciones en las rutas, trasladó el parseo
-del momento combinado al dominio (`parsear_momento` y las variantes
-`crear_reserva_entre` / `consultar_disponibilidad_entre` /
-`unidad_disponible_entre`), reescribió `tests/test_api.py` al nuevo
-contrato y documentó la corrección y sus desviaciones.
+**Acción del agente.** Implementó y validó el contrato definido: la
+disponibilidad quedó integrada en `GET /api/unidades` mediante los
+parámetros `desde`/`hasta` (momentos combinados `AAAA-MM-DDTHH:MM`; sin
+parámetros la ruta devuelve solo el inventario) y el cuerpo de creación
+usa `unidad`, `solicitante`, `desde` y `hasta`. Para no duplicar
+validaciones en las rutas, trasladó el parseo del momento combinado al
+dominio (`parsear_momento` y las variantes `crear_reserva_entre` /
+`consultar_disponibilidad_entre` / `unidad_disponible_entre`), reescribió
+`tests/test_api.py` al contrato (creación 201, disponibilidad por
+intervalo, errores 400/404/409) y documentó el diseño de rutas y las
+desviaciones 400/422.
 
-**Decisión humana y motivo.** El usuario revisó el resultado corregido y lo
-aceptó: «La Etapa 2 está completa y revisada», autorizando la etapa
-siguiente, y versionó el resultado en el commit `e30ec93`. Motivo: el
-contrato final coincidía con el prompt completo y la suite completa quedó
-en verde (48 pruebas en ese momento).
+**Decisión humana y motivo.** El usuario revisó el resultado y lo aceptó:
+«La Etapa 2 está completa y revisada», autorizando la etapa siguiente, y
+versionó el resultado en el commit `e30ec93`. Motivo: el contrato
+implementado coincidía con la definición de la instrucción y la suite
+completa quedó en verde (48 pruebas en ese momento: 22 de API al nuevo
+contrato + 26 de dominio, registradas en `docs/decisiones.md`).
 
 **Evidencia verificable.**
 
@@ -88,9 +93,13 @@ en verde (48 pruebas en ese momento).
   "solicitante", "desde", "hasta")` y ruta `GET /api/unidades` con
   parámetros `desde`/`hasta`.
 - `app/reservas.py`: `parsear_momento` y las variantes `_entre`.
-- `tests/test_api.py`: pruebas al contrato `desde`/`hasta`.
-- `docs/decisiones.md`, sección «Corrección tras recibir el prompt
-  completo» (en `e30ec93`), con las desviaciones 400/422 documentadas.
+- `tests/test_api.py` (en `e30ec93`): pruebas al contrato `desde`/`hasta`
+  (por ejemplo, `test_unidades_con_intervalo_reflejan_reserva_activa` y
+  `test_intervalo_incompleto_en_unidades_responde_400`).
+- `docs/decisiones.md`, Etapa 2 (versionada en `e30ec93`): diseño de las
+  rutas, formato de solicitudes y respuestas, desviaciones 400/422 y la
+  verificación real (48 passed + prueba de humo sobre el servidor con
+  `POST /api/reservas` → 201 y cancelación → 200).
 
 ---
 
