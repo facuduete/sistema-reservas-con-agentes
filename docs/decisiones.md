@@ -42,8 +42,6 @@ Se verificaron ejecutando los comandos, no de memoria:
 4. **Bootstrap se vendorizará** en `static/vendor/` (decisión aprobada) para
    que la aplicación funcione sin conexión a internet. Pendiente de la etapa
    de interfaz.
-5. Aviso menor observado: pip sugirió actualizarse a 26.2.2. No se actualizó
-   para no introducir variables no verificadas; no afecta al proyecto.
 
 ## Etapa 1 — Dominio y persistencia (2026-10-27)
 
@@ -565,10 +563,3 @@ declara explícitamente (§1.8, nota).
   pytest 9.1.1, SQLite 3.50.4, Git 2.45.2.windows.1.
 - Enlaces internos del README verificados: los tres documentos de `docs/`
   existen, así como todos los archivos citados en la estructura.
-
-### Dato no verificable de forma independiente
-
-El modelo utilizado se registra en el README (§3.1) según la configuración
-de la sesión del agente: GLM-5.3-Flash Free (`opencode/glm-5.3-flash-free`),
-con la advertencia expresa de que ningún archivo del repositorio lo
-registra y que no pudo verificarse por otra vía. No se afirma más de eso.
