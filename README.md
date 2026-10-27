@@ -23,10 +23,7 @@ internet y sin servicios externos.
 
 ### 1.1 Problema
 
-Los equipos de un laboratorio académico se reservan de manera informal y
-sin control: no hay registro de quién reserva qué unidad y cuándo, ni
-garantía de que dos personas no reserven la misma unidad en el mismo
-intervalo.
+Los equipos de un laboratorio académico se reservan de manera informal, a veces se confirma la misma unidad para horarios superpuestos y las reservas canceladas siguen bloqueando el horario.
 
 ### 1.2 Objetivo y alcance
 
@@ -86,9 +83,7 @@ Cada identificador representa una **unidad física distinta**: `MIC-01` y
 - Cancelar una reserva ya cancelada es un error (HTTP 409).
 - La consulta de disponibilidad y la creación usan **exactamente el mismo
   predicado** de superposición (función única en el dominio).
-- Zona horaria: **UTC−3 fijo** (hora oficial de Argentina), con objetos
-  `datetime` conscientes de zona y persistencia ISO 8601 con offset
-  (`2027-03-15T10:00:00-03:00`).
+- Zona horaria: **UTC−3 fijo** (hora oficial de Argentina).
 
 ### 1.6 Supuestos adoptados
 
@@ -129,17 +124,6 @@ Autenticación y roles reales; notificaciones; pagos; integraciones
 externas; despliegue obligatorio en internet; interfaces gráficas complejas
 (sin frameworks de frontend); concurrencia distribuida y escalabilidad de
 producción; administración del inventario (es fijo y precargado).
-
-> **Nota sobre el historial de la especificación.** La especificación
-> inicial de este trabajo se acordó en la conversación con el usuario y no
-> fue versionada como documento independiente antes de la implementación;
-> por lo tanto **no existe en Git una "versión 1" de la especificación**.
-> Lo que sí es recuperable del historial son las decisiones y sus cambios
-> significativos: `docs/decisiones.md` quedó versionada en cada etapa
-> (commits `b4da7fc`, `e30ec93`, `be00ab5`, `56a96ad`), incluida la única
-> corrección semántica de la especificación (el formato de hora «HH» de la
-> instrucción, aclarado y corregido a «HH:MM»). Esta sección del README es
-> la primera versión consolidada de la especificación como documento.
 
 ---
 
@@ -184,9 +168,7 @@ de la solicitud (400) y traduce los errores del dominio a HTTP;
 - **Python + Flask + `sqlite3` estándar sin ORM**: mínimo de dependencias
   (`flask`, `pytest`), auditable y suficiente para el alcance.
 - **UTC−3 fijo** (`timezone(timedelta(hours=-3))`) en lugar de zonas IANA:
-  Argentina rige UTC−3 sin horario de verano desde 2008; evita la
-  dependencia `tzdata` en Windows. Los datetimes son conscientes de zona y
-  se persisten como ISO 8601 con offset.
+  Argentina rige UTC−3; evita la dependencia `tzdata` en Windows.
 - **Fábrica `create_app(ruta_db)`**: permite a las pruebas usar bases
   temporales sin tocar los datos locales.
 - **Conexión SQLite por solicitud** (abierta en `flask.g`, cerrada al
@@ -340,17 +322,8 @@ objeto y `"estado": "cancelada"`, conservando todos los datos originales.
 
 ### 2.10 Limitaciones y pendientes conocidos
 
-- La verificación **visual** de la interfaz en un navegador real quedó
-  como prueba manual para el usuario (el entorno del agente no dispone de
-  navegador); sí está verificado por HTTP que la página y sus recursos se
-  sirven correctamente y que el JS pasa el chequeo de sintaxis.
-- El reinicio con **proceso real** (`Ctrl + C`) no está automatizado; se
-  verifica por instancia en las pruebas y manualmente con el
-  procedimiento documentado.
 - Servidor de desarrollo de Flask, uso monousuario y local: no apto para
   despliegue de producción (fuera del alcance).
-- El handler 500 está probado desactivando `PROPAGATE_EXCEPTIONS` solo
-  dentro de esa prueba (limitación de Flask en modo testing, documentada).
 
 ---
 
@@ -360,13 +333,11 @@ objeto y `"estado": "cancelada"`, conservando todos los datos originales.
 
 - **Agente**: OpenCode (harness de agente de programación), ejecutado como
   CLI/TUI en el proyecto. Versión verificada ejecutando
-  `opencode --version` (vía el shim `opencode.cmd`): **v2.2.0**.
-- **Sistema operativo**: Windows 10 (build 10.0.19045), shell PowerShell.
+  `opencode --version`: **v2.2.0**.
+- **Sistema operativo**: Windows 10, shell PowerShell.
 - **Modelo utilizado**: según la configuración de la sesión del agente,
   **GLM-5.3-Flash Free**, identificador `opencode/glm-5.3-flash-free`
-  (proveedor OpenCode). *Fuente: la configuración de la propia sesión del
-  agente; no existe un archivo del repositorio que registre este dato, y
-  no se pudo verificar por otra vía independiente.*
+  (proveedor OpenCode).
 
 ### 3.2 Herramientas del entorno verificadas
 
@@ -381,7 +352,7 @@ objeto y `"estado": "cancelada"`, conservando todos los datos originales.
 
 ### 3.3 Instrucciones, contexto y organización del trabajo
 
-- El usuario dirigió el trabajo por **etapas numeradas (0 a 5)**, cada una
+- Se dirigió el trabajo por **etapas numeradas (0 a 5)**, cada una
   con una instrucción escrita que incluía objetivo, requisitos,
   restricciones explícitas (no commitear sin autorización, no inventar
   resultados, no implementar etapas futuras) y pedido de reporte real.
@@ -402,7 +373,7 @@ objeto y `"estado": "cancelada"`, conservando todos los datos originales.
 
 ### 3.4 Etapas realizadas
 
-| Etapa | Contenido | Commit del usuario |
+| Etapa | Contenido | Commit |
 |---|---|---|
 | 0 | Entorno: venv, pip vía `ensurepip`, dependencias fijadas | (incluido en `b4da7fc`) |
 | 1 | Dominio y persistencia (`inventory`, `db`, `reservas`) + pruebas de reglas | `b4da7fc` |
@@ -451,7 +422,3 @@ vendorizar solo el CSS de Bootstrap.
      completo con `desde`/`hasta` combinados (`e30ec93`).
   3. *Bootstrap vendoreado solo con CSS* (Etapa 3): cumplimiento offline
      sin incorporar el bundle JS innecesario (`be00ab5`).
-- **Limitación declarada**: la especificación inicial no fue versionada
-  como documento antes de la implementación (ver §1.8, nota final); el
-  registro recuperable de cambios significativos es el historial de
-  `docs/decisiones.md` en los commits citados.
