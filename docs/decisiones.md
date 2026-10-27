@@ -409,3 +409,115 @@ especifica un contrato distinto al inferido. Correcciones aplicadas:
    Lo que sí está verificado: la página se renderiza, los recursos se
    sirven, la sintaxis del JS es válida y la API responde según lo probado
    en la Etapa 2.
+
+## Etapa 4 — Persistencia y pruebas integrales (2026-10-27)
+
+### Archivos creados y modificados
+
+- Creados: `tests/test_persistencia.py` (8 pruebas),
+  `docs/prueba_persistencia.md` (procedimiento manual para Windows).
+- Modificados: `tests/test_api.py` (1 prueba nueva del handler 500),
+  `docs/decisiones.md` (esta sección).
+- **Sin cambios** en `app/`: no hizo falta adaptar nada; la fábrica
+  `create_app(ruta_db)` ya permitía crear instancias nuevas sobre la misma
+  base, que era el único requisito estructural de la verificación.
+
+### Cómo se simula el reinicio en las pruebas automatizadas
+
+1. Se crea una base SQLite temporal (`tmp_path` de pytest).
+2. Se crea una **primera instancia** de la aplicación con
+   `create_app(ruta_db=...)` y, con su cliente de pruebas, se crea una
+   reserva activa y se crea y cancela otra, guardando los JSON completos
+   de ambas (id público, unidad, solicitante, inicio, fin, estado,
+   `creada_en`, `cancelada_en`).
+3. Las conexiones SQLite se abren por solicitud y Flask las cierra al
+   terminar cada contexto de aplicación; además se descartan las
+   referencias de la primera instancia.
+4. Se crea una **segunda instancia nueva** de la aplicación sobre
+   exactamente la misma ruta (nuevo objeto Flask, esquema reinicializado
+   de forma idempotente, nuevas conexiones) y se comprueba, vía
+   `GET /api/reservas`, que ambas reservas siguen existiendo con todos sus
+   campos idénticos y sus estados correspondientes.
+5. No son dos consultas a la misma instancia: la segunda aplicación se
+   reconstruye desde cero. **No se afirma haber detenido y reiniciado un
+   proceso real del servidor**: eso queda cubierto por el procedimiento
+   manual de `docs/prueba_persistencia.md`.
+
+### Pruebas agregadas
+
+En `tests/test_persistencia.py`:
+
+1. `test_reservas_activas_y_canceladas_persisten_tras_reiniciar` — caso 12
+   completo: ambas reservas sobreviven con id y datos originales.
+2. `test_reserva_activa_sigue_bloqueando_tras_reiniciar` — la activa
+   persistida sigue bloqueando su intervalo.
+3. `test_reserva_cancelada_no_bloquea_tras_reiniciar` — la cancelada deja
+   el intervalo libre y este vuelve a ser reservable.
+4. `test_consecutivas_siguieron_compatibles_tras_reiniciar` — una reserva
+   consecutiva creada **después** del reinicio contra la persistida es
+   aceptada (borde compartido).
+5. `test_otra_unidad_no_afecta_disponibilidad_tras_reiniciar` — la unidad
+   reservada sigue ocupada y otra unidad sigue libre en el mismo intervalo.
+6. `test_clave_foranea_impide_reservas_de_unidades_inexistentes` — la FK
+   activada por conexión rechaza con `IntegrityError` un INSERT directo
+   con unidad inexistente.
+7. `test_cancelacion_solo_modifica_campos_de_estado` — a nivel de fila:
+   la cancelación cambia únicamente `estado` y `cancelada_en`; id,
+   unidad, solicitante, inicio, fin y `creada_en` quedan idénticos.
+
+En `tests/test_api.py`:
+
+8. `test_error_interno_responde_500_sin_detalles` — cierra la deuda de la
+   Etapa 2. Con `testing = True` Flask re-lanza las excepciones
+   (`PROPAGATE_EXCEPTIONS` implícito), así que la prueba desactiva esa
+   configuración **solo dentro de la prueba** y simula la falla
+   reemplazando con `monkeypatch` la función de dominio que la vista
+   invoca. Comprueba 500, JSON con `codigo: "error_interno"` y ausencia de
+   trazas, tipo de excepción y detalles internos en el cuerpo. El
+   comportamiento de producción no se altera.
+
+Las fechas de estas pruebas se calculan **relativas al reloj real** (7
+días en adelante) en lugar de fechas fijas, para que no envejezcan.
+
+### Resultado real
+
+`.venv\Scripts\python.exe -m pytest -v` → **58 passed in 1.31s** (26 de
+dominio + 25 de API + 7 de persistencia), en la primera ejecución y sin
+necesidad de corregir código de aplicación. La ruta de la base por defecto
+se verificó ejecutando el cálculo real de la aplicación:
+`<raíz del proyecto>\data\reservas.db`, derivada de la ubicación de
+`app/__init__.py` y no del directorio de trabajo.
+
+### Cobertura de requisitos observada
+
+| Requisito | Pruebas que lo verifican | Resultado |
+|---|---|---|
+| Creación válida | `test_crear_reserva_valida`; `test_creacion_valida_devuelve_201_e_identificador_publico` | passed |
+| Rechazo de solapamientos | `test_rechazo_solapamiento_misma_unidad`; `test_reserva_solapada_responde_409` | passed |
+| Intervalos consecutivos | `test_intervalos_consecutivos_permitidos`; `test_consecutivas_siguieron_compatibles_tras_reiniciar` | passed |
+| Simultáneas en unidades distintas | `test_simultaneas_unidades_distintas_permitidas`; `test_otra_unidad_no_afecta_disponibilidad_tras_reiniciar` | passed |
+| Fechas/horas inválidas | `test_fechas_horas_invalidas_rechazadas`; `test_errores_de_dominio_se_traducen_a_http` (casos `fecha_invalida`) | passed |
+| Duración mínima | `test_duracion_menor_a_diez_minutos_rechazada`; `test_duracion_minima_aceptada`; caso `duracion_invalida` de la API | passed |
+| Solicitante obligatorio | `test_solicitante_vacio_rechazado`; caso `solicitante_invalido` de la API; `test_campos_ausentes_responden_400` | passed |
+| Inicio no anterior al momento actual | `test_inicio_anterior_al_momento_actual_rechazado`; caso `inicio_pasado` de la API | passed |
+| Unidad inexistente | `test_unidad_inexistente_rechazada`; `test_unidad_inexistente_responde_404`; `test_clave_foranea_impide_reservas_de_unidades_inexistentes` | passed |
+| Cancelación e historial | `test_cancelar_conserva_datos_y_libera_disponibilidad`; `test_cancelacion_solo_modifica_campos_de_estado`; `test_listado_incluye_activas_y_canceladas`; `test_cancelar_ya_cancelada_es_error`; `test_cancelar_repetida_responde_409` | passed |
+| Disponibilidad tras cancelar | `test_disponibilidad_se_libera_tras_cancelar`; `test_reserva_cancelada_no_bloquea_tras_reiniciar` | passed |
+| Persistencia tras reiniciar (caso 12) | `test_reservas_activas_y_canceladas_persisten_tras_reiniciar` + las 4 pruebas de disponibilidad tras reiniciar | passed |
+| Inicialización idempotente | `test_inicializacion_idempotente`; `test_reservas_activas_y_canceladas_persisten_tras_reiniciar` (la segunda instancia reinicializa) | passed |
+| Errores HTTP coherentes | `test_estructura_de_error_coherente`; `test_error_interno_responde_500_sin_detalles` | passed |
+
+### Problemas y limitaciones
+
+- **Ningún defecto encontrado en esta etapa**: la suite completa pasó en la
+  primera ejecución y no hubo que corregir código de aplicación ni
+  debilitar pruebas.
+- **Limitación declarada**: la detención y el reinicio de un proceso real
+  del servidor no se automatizan; la verificación equivalente a nivel de
+  aplicación (nueva instancia sobre la misma base) es la de
+  `test_persistencia.py`, y el procedimiento manual con `Ctrl + C` para el
+  entorno real quedó en `docs/prueba_persistencia.md`.
+- **Limitación previa resuelta**: el handler 500, que en la Etapa 2 había
+  quedado sin prueba por la propagación de excepciones en modo testing,
+  ahora tiene una prueba fiable mediante `PROPAGATE_EXCEPTIONS = False`
+  acotada a esa prueba.

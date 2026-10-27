@@ -266,3 +266,31 @@ def test_bootstrap_vendoreado_se_sirve_localmente(cliente):
     assert respuesta.status_code == 200
     # El encabezado del archivo minificado identifica la versión vendoreada.
     assert b"Bootstrap" in respuesta.data and b"v5.3.3" in respuesta.data
+
+
+def test_error_interno_responde_500_sin_detalles(app, cliente, monkeypatch):
+    """El handler de 500 responde JSON genérico, sin trazas ni detalles.
+
+    Con ``testing = True`` Flask re-lanza las excepciones no previstas
+    (PROPAGATE_EXCEPTIONS implícito); en esta prueba se desactiva
+    explícitamente para ejercitar el handler real, sin alterar el
+    comportamiento de producción. La falla se simula reemplazando la
+    función de dominio que la vista invoca.
+    """
+    app.config["PROPAGATE_EXCEPTIONS"] = False
+
+    def explotar(*args, **kwargs):
+        raise RuntimeError("fallo interno simulado con detalle sensible")
+
+    monkeypatch.setattr("app.views.crear_reserva_entre", explotar)
+    respuesta = cliente.post("/api/reservas", json=cuerpo_valido())
+    assert respuesta.status_code == 500
+    texto = respuesta.get_data(as_text=True)
+    cuerpo = respuesta.get_json()
+    assert set(cuerpo) == {"error"}
+    assert cuerpo["error"]["codigo"] == "error_interno"
+    assert cuerpo["error"]["mensaje"]
+    # Sin trazas, tipos de excepción ni detalles internos en la respuesta.
+    assert "RuntimeError" not in texto
+    assert "fallo interno" not in texto
+    assert "Traceback" not in texto
