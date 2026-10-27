@@ -521,3 +521,54 @@ se verificó ejecutando el cálculo real de la aplicación:
   quedado sin prueba por la propagación de excepciones en modo testing,
   ahora tiene una prueba fiable mediante `PROPAGATE_EXCEPTIONS = False`
   acotada a esa prueba.
+
+## Etapa 5 — Documentación final (2026-10-27)
+
+### Archivos creados y modificados
+
+- Modificado: `README.md`, reescrito con las cuatro secciones obligatorias
+  (Especificación breve, Solución, Preparación del agente, Registro de
+  decisiones y delegación).
+- Creado: `docs/delegacion.md`, con los tres episodios reales de delegación
+  (objetivo → instrucción → acción del agente → decisión humana →
+  evidencia), reconstruidos desde el historial de conversación y commits:
+  1. Contradicción «HH» vs. «HH:MM» y su resolución por consulta (Etapa 1,
+     evidencia en `b4da7fc`).
+  2. Corrección del contrato de la API tras recibir el prompt completo
+     (Etapa 2, evidencia en `e30ec93`).
+  3. Bootstrap vendoreado solo con CSS (Etapa 3, evidencia en `be00ab5`).
+- Esta sección (registro de la etapa de documentación).
+
+### Limitación declarada sobre la especificación
+
+La especificación inicial se acordó en conversación y nunca fue versionada
+como documento independiente antes de la implementación: **no existe en Git
+una versión 1 de la especificación**. El registro recuperable de cambios
+significativos es el historial de `docs/decisiones.md` versionada en cada
+commit (`b4da7fc` → `56a96ad`), incluida la única corrección semántica
+(formato de hora). No se fabricaron versiones anteriores. El README lo
+declara explícitamente (§1.8, nota).
+
+### Verificaciones realizadas en esta etapa
+
+- Commits citados como evidencia inspeccionados con `git show`: la nota
+  HH:MM está en `b4da7fc` (`docs/decisiones.md`), el contrato
+  `desde`/`hasta` en `e30ec93` (`app/views.py`), el CSS de Bootstrap en
+  `be00ab5`, y los archivos de persistencia en `56a96ad`.
+- `opencode --version` (vía `opencode.cmd`; el shim `.ps1` está bloqueado
+  por la política de ejecución de PowerShell) → **v2.2.0**.
+- SO verificado: Windows NT 10.0.19045.
+- Ruta de la base por defecto verificada ejecutando el cálculo real de
+  `app/__init__.py` (Etapa 4): `<raíz del proyecto>\data\reservas.db`.
+- Suite completa final: `58 passed in 1.37s`.
+- Versiones re-verificadas al cierre: Python 3.14.3, pip 25.3, Flask 3.1.3,
+  pytest 9.1.1, SQLite 3.50.4, Git 2.45.2.windows.1.
+- Enlaces internos del README verificados: los tres documentos de `docs/`
+  existen, así como todos los archivos citados en la estructura.
+
+### Dato no verificable de forma independiente
+
+El modelo utilizado se registra en el README (§3.1) según la configuración
+de la sesión del agente: GLM-5.3-Flash Free (`opencode/glm-5.3-flash-free`),
+con la advertencia expresa de que ningún archivo del repositorio lo
+registra y que no pudo verificarse por otra vía. No se afirma más de eso.
