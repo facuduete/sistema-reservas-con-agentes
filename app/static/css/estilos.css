@@ -1,0 +1,34 @@
+/*
+ * Estilos propios del sistema de reservas de laboratorio.
+ * Complementan Bootstrap 5 (servido localmente desde static/vendor/).
+ */
+
+body {
+  background-color: #f6f8fa;
+}
+
+/* Las dos acciones de navegación no deben partirse en pantallas angostas. */
+header .btn {
+  white-space: nowrap;
+}
+
+/* Las tarjetas de unidades igualan su altura dentro de la fila. */
+.tarjeta-unidad .card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+/* El estado se transmite con texto + color: la leyenda refuerza el badge. */
+.leyenda-estado {
+  font-size: 0.8rem;
+}
+
+/* Refuerzo de foco visible para navegación por teclado. */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 3px solid #0d6efd;
+  outline-offset: 2px;
+}

@@ -10,7 +10,7 @@ segundos ni offset) y se convierten mediante ``parsear_momento`` del propio
 dominio: la validación de formato no está duplicada en esta capa.
 """
 
-from flask import Blueprint, current_app, g, jsonify, request
+from flask import Blueprint, current_app, g, jsonify, render_template, request
 
 from . import db
 from .reservas import (
@@ -44,6 +44,12 @@ def error(codigo: str, mensaje: str, estado: int):
 def campos_faltantes(datos: dict, campos) -> list[str]:
     """Campos ausentes o explícitamente nulos en el cuerpo de la solicitud."""
     return [campo for campo in campos if datos.get(campo) is None]
+
+
+@api.get("/")
+def pagina_principal():
+    """Página principal de la interfaz web (HTML + JS que usa la API)."""
+    return render_template("index.html")
 
 
 @api.get("/api/unidades")

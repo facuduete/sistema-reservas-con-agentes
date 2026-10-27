@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sistema de reservas de laboratorio</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/bootstrap/bootstrap.min.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/estilos.css') }}">
+</head>
+<body>
+
+  <header class="border-bottom bg-white py-3">
+    <div class="container">
+      <div class="d-flex flex-wrap align-items-end justify-content-between gap-2">
+        <div>
+          <h1 class="h3 mb-1">Sistema de reservas de laboratorio</h1>
+          <p class="text-body-secondary mb-0">
+            Consultá la disponibilidad de los equipos, creá reservas y cancelalas.
+            Los intervalos son semiabiertos [inicio, fin) y la hora es la de Argentina (UTC−3).
+          </p>
+        </div>
+        <nav aria-label="Secciones de la página">
+          <a class="btn btn-outline-primary btn-sm" href="#disponibilidad">Disponibilidad</a>
+          <a class="btn btn-outline-primary btn-sm" href="#reservas">Reservas</a>
+        </nav>
+      </div>
+    </div>
+  </header>
+
+  <main class="container py-4">
+
+    <!-- Región de mensajes de éxito y error, anunciada a lectores de pantalla. -->
+    <div id="mensajes" aria-live="polite" class="mb-3"></div>
+
+    <section id="disponibilidad" class="mb-5" aria-labelledby="titulo-disponibilidad">
+      <h2 id="titulo-disponibilidad" class="h4 mb-3">Consulta de disponibilidad</h2>
+      <form id="form-disponibilidad" class="card card-body shadow-sm" novalidate>
+        <div class="row g-3">
+          <div class="col-6 col-md-3">
+            <label class="form-label" for="disp-fecha-inicio">Fecha de inicio</label>
+            <input class="form-control" type="date" id="disp-fecha-inicio" name="fecha-inicio">
+          </div>
+          <div class="col-6 col-md-3">
+            <label class="form-label" for="disp-hora-inicio">Hora de inicio</label>
+            <input class="form-control" type="time" id="disp-hora-inicio" name="hora-inicio" step="60">
+          </div>
+          <div class="col-6 col-md-3">
+            <label class="form-label" for="disp-fecha-fin">Fecha de finalización</label>
+            <input class="form-control" type="date" id="disp-fecha-fin" name="fecha-fin">
+          </div>
+          <div class="col-6 col-md-3">
+            <label class="form-label" for="disp-hora-fin">Hora de finalización</label>
+            <input class="form-control" type="time" id="disp-hora-fin" name="hora-fin" step="60">
+          </div>
+        </div>
+        <div class="mt-3">
+          <button type="submit" class="btn btn-primary" id="btn-consultar">Consultar disponibilidad</button>
+        </div>
+      </form>
+      <div id="resultado-disponibilidad" class="mt-3"></div>
+    </section>
+
+    <section id="reservas" aria-labelledby="titulo-reservas">
+      <h2 id="titulo-reservas" class="h4 mb-3">Reservas</h2>
+
+      <div class="card card-body shadow-sm mb-4">
+        <h3 class="h5 mb-3">Nueva reserva</h3>
+        <form id="form-reserva" novalidate>
+          <div class="row g-3">
+            <div class="col-12 col-md-4">
+              <label class="form-label" for="res-unidad">Unidad</label>
+              <select class="form-select" id="res-unidad" name="unidad">
+                <option value="">Cargando unidades…</option>
+              </select>
+            </div>
+            <div class="col-12 col-md-8">
+              <label class="form-label" for="res-solicitante">Solicitante</label>
+              <input class="form-control" type="text" id="res-solicitante" name="solicitante"
+                     maxlength="100" placeholder="Nombre del solicitante" autocomplete="off">
+            </div>
+            <div class="col-6 col-md-3">
+              <label class="form-label" for="res-fecha-inicio">Fecha de inicio</label>
+              <input class="form-control" type="date" id="res-fecha-inicio" name="fecha-inicio">
+            </div>
+            <div class="col-6 col-md-3">
+              <label class="form-label" for="res-hora-inicio">Hora de inicio</label>
+              <input class="form-control" type="time" id="res-hora-inicio" name="hora-inicio" step="60">
+            </div>
+            <div class="col-6 col-md-3">
+              <label class="form-label" for="res-fecha-fin">Fecha de finalización</label>
+              <input class="form-control" type="date" id="res-fecha-fin" name="fecha-fin">
+            </div>
+            <div class="col-6 col-md-3">
+              <label class="form-label" for="res-hora-fin">Hora de finalización</label>
+              <input class="form-control" type="time" id="res-hora-fin" name="hora-fin" step="60">
+            </div>
+          </div>
+          <div class="mt-3">
+            <button type="submit" class="btn btn-success" id="btn-reservar">Crear reserva</button>
+          </div>
+        </form>
+      </div>
+
+      <h3 class="h5 mb-3">Historial de reservas</h3>
+      <div id="listado-reservas"></div>
+    </section>
+
+  </main>
+
+  <footer class="border-top py-3">
+    <div class="container">
+      <p class="text-body-secondary small mb-0">
+        Sistema académico local. La duración mínima de una reserva es de 10 minutos y
+        no se permiten reservas anteriores al momento actual.
+      </p>
+    </div>
+  </footer>
+
+  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

@@ -243,3 +243,26 @@ def test_estructura_de_error_coherente(cliente):
         assert set(cuerpo["error"]) == {"codigo", "mensaje"}
         assert isinstance(cuerpo["error"]["codigo"], str) and cuerpo["error"]["codigo"]
         assert isinstance(cuerpo["error"]["mensaje"], str) and cuerpo["error"]["mensaje"]
+
+
+# --------------------------------------------------------------------------
+# Página principal e interfaz web (Etapa 3)
+# --------------------------------------------------------------------------
+
+
+def test_pagina_principal_se_renderiza(cliente):
+    respuesta = cliente.get("/")
+    assert respuesta.status_code == 200
+    html = respuesta.get_data(as_text=True)
+    assert "Sistema de reservas de laboratorio" in html
+    # La página referencia los recursos estáticos locales (Bootstrap vendoreado).
+    assert "/static/vendor/bootstrap/bootstrap.min.css" in html
+    assert "/static/css/estilos.css" in html
+    assert "/static/js/app.js" in html
+
+
+def test_bootstrap_vendoreado_se_sirve_localmente(cliente):
+    respuesta = cliente.get("/static/vendor/bootstrap/bootstrap.min.css")
+    assert respuesta.status_code == 200
+    # El encabezado del archivo minificado identifica la versión vendoreada.
+    assert b"Bootstrap" in respuesta.data and b"v5.3.3" in respuesta.data

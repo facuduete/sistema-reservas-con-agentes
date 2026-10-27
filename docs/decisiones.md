@@ -323,3 +323,89 @@ especifica un contrato distinto al inferido. Correcciones aplicadas:
    `cancelada` y datos originales intactos. El proceso se detuvo y la base
    `data/reservas.db` generada por la prueba de humo se eliminó para dejar
    el entorno limpio.
+
+## Etapa 3 — Interfaz web (2026-10-27)
+
+### Archivos creados y modificados
+
+- Creados: `app/templates/index.html`, `app/static/css/estilos.css`,
+  `app/static/js/app.js`,
+  `app/static/vendor/bootstrap/bootstrap.min.css` (vendoreado).
+- Modificados: `app/views.py` (solo se agregó la ruta `GET /` que renderiza
+  la página), `tests/test_api.py` (dos pruebas de integración de la página).
+
+### Decisiones
+
+1. **Ubicación de plantillas y estáticos**: `app/templates/` y
+   `app/static/` en lugar de la raíz del proyecto (el prompt sugería
+   `templates/` y `static/` de raíz). Motivo: son las ubicaciones por
+   defecto de Flask para una aplicación empaquetada con `create_app`, y
+   así no hace falta configurar rutas de carpetas ni mover la fábrica.
+   Desviación menor declarada.
+2. **Bootstrap 5.3.3 vendoreado, solo CSS**: se descargó
+   `bootstrap.min.css` (232.803 bytes) desde jsDelivr una única vez a
+   `app/static/vendor/bootstrap/` y la página lo referencia con
+   `url_for('static', ...)`, sin CDN en ejecución. **No** se vendoreó
+   `bootstrap.bundle.min.js`: la interfaz no usa ningún componente JS de
+   Bootstrap (sin colapsables, modales ni dropdowns; el confirm de
+   cancelación es `window.confirm` nativo y los avisos se cierran con un
+   manejador propio), y agregarlo habría sido una dependencia sin uso, lo
+   que el prompt prohíbe. La versión se verificó sobre el archivo
+   descargado (`Bootstrap  v5.3.3` en su encabezado) y hay una prueba que
+   comprueba que Flask lo sirve.
+3. **Comunicación con la API**: `fetch` nativo, sin librerías. El frontend
+   combina los campos de fecha y hora en `AAAA-MM-DDTHH:MM` antes de
+   llamar a la API (`momentoDesdeCampos`) y no implementa ninguna regla de
+   negocio: solo verifica completitud de campos para dar una respuesta
+   rápida (las validaciones definitivas son del backend, cuyos mensajes de
+   error se muestran textualmente). El select de unidades se puebla desde
+   `GET /api/unidades` para no duplicar el inventario en el HTML.
+4. **Formato legible de fechas sin zona peligrosa**: el ISO con offset que
+   devuelve la API se recorta textualmente con una expresión regular
+   (`15/03/2027 10:00`) en lugar de usar `new Date()`, que reinterpretaría
+   el valor en la zona del navegador y podría mostrar otra hora. El valor
+   ya está en UTC-3 local.
+5. **Errores y estados de carga**: región `#mensajes` con `aria-live`
+   para avisos de éxito/error; botones deshabilitados con spinner
+   (`aria-busy`) mientras hay solicitudes en curso, lo que además previene
+   envíos repetidos; estados vacíos para el listado sin reservas y para
+   fallos de conexión (mensaje explícito de que no se pudo conectar).
+   Toda inserción de datos del usuario (solicitante, ids) se hace con
+   `textContent`, nunca con `innerHTML`.
+6. **Cancelación**: solo las filas activas muestran el botón; se pide
+   confirmación con `window.confirm`; ante error la reserva permanece en
+   el listado con su estado anterior y se muestra el mensaje del backend
+   (por ejemplo, el 409 de "ya estaba cancelada"). Tras una creación o
+   cancelación exitosa se refrescan el listado y, si había un intervalo
+   consultado, la disponibilidad visible.
+7. **Disponibilidad**: tarjetas por unidad con badge "Disponible"/"Reservada"
+   y leyenda textual ("Tiene una reserva activa durante el intervalo
+   consultado"), de modo que el estado no se transmite solo por color.
+   Los datos provienen exclusivamente de `GET /api/unidades?desde=&hasta=`.
+8. **Accesibilidad y responsive**: etiquetas `label[for]` en todos los
+   campos, foco visible reforzado en CSS, grilla de Bootstrap con
+   columnas que colapsan en móvil; los controles nativos `date`/`time`
+   permiten intervalos que atraviesan días.
+
+### Verificación real
+
+1. `node --check app/static/js/app.js` → sin errores (Node v24.22.1
+   disponible en el entorno).
+2. `.venv\Scripts\python.exe -m pytest -v` → **50 passed in 1.11s**
+   (26 de dominio + 24 de API, incluidas las dos nuevas:
+   `test_pagina_principal_se_renderiza` y
+   `test_bootstrap_vendoreado_se_sirve_localmente`).
+3. Prueba de humo HTTP sobre `run.py` (proceso real): `GET /` → **200**
+   (5.420 bytes) con el título, los formularios y las referencias a los
+   recursos locales presentes; `GET /static/vendor/bootstrap/bootstrap.min.css`
+   → 200 (232.800 bytes); `GET /static/css/estilos.css` → 200;
+   `GET /static/js/app.js` → 200 (16.105 bytes). La base `data/reservas.db`
+   generada se eliminó al terminar.
+4. **No se realizó verificación visual en un navegador real** (el entorno
+   de ejecución del agente no dispone de uno). El comportamiento del
+   JavaScript en el navegador (renderizado, confirmación, flujo completo
+   de crear/cancelar desde la UI) queda como verificación manual pendiente
+   para el usuario: abrir `http://127.0.0.1:5000/` con `python run.py`.
+   Lo que sí está verificado: la página se renderiza, los recursos se
+   sirven, la sintaxis del JS es válida y la API responde según lo probado
+   en la Etapa 2.
